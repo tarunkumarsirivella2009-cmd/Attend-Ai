@@ -30,7 +30,7 @@ from app.schemas import (
 from app.main import (
     register_student, login_student, update_biometric_consent,
     revoke_biometric_consent, verify_attendance_otp, correct_attendance_record,
-    create_class_session, toggle_session_window
+    create_class_session, toggle_session_window, health_check
 )
 from app.face_engine import face_engine
 
@@ -56,6 +56,10 @@ def run_suite():
 
     # 1. Verify Database Schema Initialization
     assert_test(engine is not None, "Relational database engine initialized")
+
+    # Health Check
+    health = health_check()
+    assert_test(health.get("status") == "healthy", "Render health check endpoint verified (/health)")
 
     # 2. Student Registration
     test_roll = "24B91A0588"

@@ -1,8 +1,9 @@
+import os
 import json
 import csv
 import io
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,10 +39,19 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for frontend integration
+# Configure CORS using environment variable for deployed frontend
+frontend_url_env = os.getenv("FRONTEND_URL", "*").strip()
+if frontend_url_env == "*" or not frontend_url_env:
+    allowed_origins = ["*"]
+else:
+    allowed_origins = [o.strip() for o in frontend_url_env.split(",") if o.strip()]
+    for local in ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]:
+        if local not in allowed_origins:
+            allowed_origins.append(local)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,6 +67,17 @@ def root():
         "status": "Online",
         "version": "1.0.0",
         "biometrics_engine": "OpenCV Facial Cascade + 128d Normalized Gradient Embeddings"
+    }
+
+@app.get("/health")
+@app.get("/api/health")
+def health_check():
+    """Health check endpoint for Render/uptime monitoring."""
+    return {
+        "status": "healthy",
+        "service": "AttendAI Backend API",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "database": "sqlite" if "sqlite" in str(engine.url) else "postgresql"
     }
 
 # ----------------- AUTHENTICATION -----------------
@@ -584,3 +605,11 @@ def list_students(db: Session = Depends(get_db)):
 def get_audit_trail(db: Session = Depends(get_db)):
     logs = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).all()
     return logs
+
+if __name__ == "__main__":
+    import uvicorn
+    # Render assigns PORT dynamically; default to 8000 for local dev
+    port = int(os.environ.get("PORT", 8000))
+    # Must bind to 0.0.0.0 for external cloud access
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)
+
